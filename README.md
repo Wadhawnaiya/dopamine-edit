@@ -43,6 +43,25 @@ can force discovery if needed.
 For another compatible agent, copy the same skill folder into that agent's skill
 directory, or set `DOPAMINE_SKILLS_DIR` when invoking the installer.
 
+## Keeping installed copies in sync
+
+Edit the skill in one place, then push the change to every agent that has it:
+
+```bash
+bash scripts/sync-installs.sh            # copy source over each install
+bash scripts/sync-installs.sh --check    # read-only: exit 1 if any install lags
+bash scripts/sync-installs.sh --dry-run  # show the plan
+```
+
+The source is the repo checkout you run it from (or `--from DIR`). Default
+targets are the OpenCode, Claude Code and shared-agents skill directories that
+exist on the machine; `--to DIR` is repeatable. It backs up each target before
+writing, verifies hashes after, and **never deletes target-only files** — that
+keeps each install's local `assets/brand` photo/layer intact even though the
+public repo does not carry it (`--prune` removes other target-only files but
+still keeps brand assets). Run it from an installed copy too: the copy you run
+becomes the source and it syncs the others.
+
 ## Workflow dependencies
 
 The upstream HyperFrames skills and Agent-Reach are **not vendored here**. Install

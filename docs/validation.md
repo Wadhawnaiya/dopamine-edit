@@ -58,3 +58,8 @@ are excluded from git.
 The install helper was also exercised twice in an isolated destination to check
 first install and backup-before-update behavior. No real watcher service was
 enabled by tests.
+
+The multi-install sync helper was checked for: read-only `--check` drift
+detection, `--dry-run`, backup-before-write, post-write hash verification,
+`--prune` preserving local brand assets, running from the repo and from an
+installed copy, and skipping the source when it is also listed as a target.

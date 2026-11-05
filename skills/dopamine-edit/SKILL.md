@@ -310,3 +310,7 @@ and yt-dlp support varies by site. No automatic login/installation is implied.
 `scripts/watch.sh --install-service` is opt-in and spends tokens. Read its code/
 help and verify current `opencode run --help` before enabling. Skill maintenance
 must not start the watcher, change its service or process raw clips.
+
+When the skill is installed for several agents, keep the copies in step with
+`scripts/sync-installs.sh` (`--check` is read-only and exits non-zero when a copy
+lags). It preserves each install's local brand assets and never edits raw media.
