@@ -9,7 +9,8 @@ description: >
   Reddit, LinkedIn and other supported sites using Agent-Reach when available
   and yt-dlp for supported public video references. Use for "dopamine edit",
   "edit my raw video", "make this viral", "process the raw folder", or subject
-  cutouts with motion graphics. Run locally through render and quality review
+  cutouts with motion graphics. Shows a draft preview for approval before the
+  delivery render. Run locally through render and quality review
   without routine questions. Requests to improve this skill edit its files;
   they do not start a video job. Not for no-footage text-to-video briefs.
 ---
@@ -62,10 +63,11 @@ output/<unique-slug>/
   BRIEF.md          # workflow: general-video; flow: automation; storyboard: no
   STORYBOARD.md     # timed beats and scene sources
   EDIT.md           # source-to-output edit map, layers, audio, exceptions
-  DELIVERY.json     # expected duration, width, height, fps, expect_audio/music/brand/brand
+  DELIVERY.json     # expected duration, width, height, fps, expect_audio/music/brand
   REVIEW.json       # evidence-backed review of this exact MP4
   MUSIC.md          # footage-led music brief, shortlist decision and cue plan
   MUSIC.json        # downloaded bed, source/license, hash, duration, credits
+  preview/          # draft MP4/cover/contact shown for approval; never a delivery
   assets/
     source.<ext>    # copy with correct container, or normalized source.mp4
     analysis/      # probe, contact sheet, inspected frames
@@ -255,12 +257,41 @@ Source suitable public licensed BGM through the music guide and SFX through
 `/media-use`. Reference music is **not** reusable by default. If music download
 fails, try the bounded licensed alternatives; do not silently omit the bed.
 Deliberate silence/source-music/no-added-music exceptions need `expect_music:
-false` plus `music_exception` in the brief/delivery plan. Dialogue leads;
-duck/carve with `/hyperframes-audio`. Target
-about -14 LUFS integrated and ≤ -1 dBTP; measure the **rendered mix**. SFX must
-reinforce ideas, never mask consonants or stack on every caption.
+false` plus `music_exception` in the brief/delivery plan.
 
-### 8. Verify, render, review, then mark done
+**The voice leads.** Speech must be the easiest thing to hear: keep music and SFX
+clearly below it and never let a bed sit at voice level (that is what makes an
+edit "hard to listen to"). Defaults: prepared beds master at **-32 LUFS**, mounted
+at gain `0.8-1.0`, ducked/carved `6-12 dB` under dialogue; SFX peaks `12-18 dB`
+below the voice. The music gate requires at least `music_separation_db`
+(default **16 dB**) between the master target and the loudest the bed can be, and
+QA measures `voice_contrast_db` (p90-p10 of momentary loudness) as direct
+evidence. Set `min_voice_contrast_db` (usually `8`) to fail a flat, voice-masking
+mix. Duck/carve with `/hyperframes-audio`. Target about -14 LUFS integrated and
+≤ -1 dBTP; measure the **rendered mix**. SFX must reinforce ideas, never mask
+consonants or stack on every caption.
+
+### 8. Show the preview and get approval
+
+Read [preview-checkpoint.md](references/preview-checkpoint.md). Before any
+delivery render, produce the draft the user reviews:
+
+```bash
+bash "$SKILL_DIR/scripts/preview.sh" "$OUT/project" "$SLUG" --json
+```
+
+Show the draft MP4 plus the cover/contact sheet (and the Studio command) and ask
+what to change. Apply their changes and run `preview.sh` again. On approval:
+
+```bash
+python3 "$SKILL_DIR/scripts/preview.py" approve --root "$OUT" --note "<what they approved>"
+```
+
+The draft writes only under `preview/`. A delivery render is refused until the
+approval matches the current composition, so an unreviewed cut cannot ship by
+accident. `DOPAMINE_SKIP_PREVIEW=1` is only for an explicitly unattended run.
+
+### 9. Verify, render, review, then mark done
 
 Read [quality-gates.md](references/quality-gates.md). Write actual delivery
 expectations, then run:
@@ -274,8 +305,8 @@ proof frames, renders in a fresh attempt directory, then checks the decoded MP4
 against `DELIVERY.json`. It preserves raw ffprobe metadata and rejects missing
 streams, duration/size/FPS mismatches, decode errors, silence and loudness/peak
 failures. It also refuses to accept a candidate whose required licensed music or
-brand layer is missing, changed or unmounted. It does **not** declare
-visual/caption correctness automatically.
+brand layer is missing, changed or unmounted, or whose preview was never approved.
+It does **not** declare visual/caption correctness automatically.
 
 Before a delivery render, open the local Studio preview per `/hyperframes` and
 verify its project URL responds; offer it as an editable surface without an

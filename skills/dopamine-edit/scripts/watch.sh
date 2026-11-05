@@ -8,6 +8,8 @@ SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT_ROOT="${DOPAMINE_ROOT:-$HOME/Work/video_editing}"
 RAW="$PROJECT_ROOT/raw"
 STATE_DIR="${DOPAMINE_STATE_DIR:-$HOME/.config/dopamine-edit}"
+# The watcher is explicitly unattended, so it approves the preview checkpoint.
+SKIP_PREVIEW="${DOPAMINE_SKIP_PREVIEW:-1}"
 LOCK="$STATE_DIR/watch.lock"
 LOG="$STATE_DIR/watch.log"
 UNIT_DIR="${HOME}/.config/systemd/user"
@@ -42,7 +44,8 @@ def quote(value):
     if '\n' in value or '\r' in value or '\0' in value:
         raise ValueError('invalid newline/NUL in service value')
     return '"' + value.replace('\\', '\\\\').replace('"', '\\"').replace('%', '%%') + '"'
-values = {'DOPAMINE_ROOT': root, 'DOPAMINE_STATE_DIR': state}
+values = {'DOPAMINE_ROOT': root, 'DOPAMINE_STATE_DIR': state,
+          'DOPAMINE_SKIP_PREVIEW': os.environ.get('DOPAMINE_SKIP_PREVIEW', '1')}
 for key in ('DOPAMINE_DEBOUNCE', 'DOPAMINE_HF_VERSION', 'DOPAMINE_CACHE_DIR'):
     if key in os.environ:
         values[key] = os.environ[key]
@@ -85,6 +88,8 @@ watch_foreground() {
 
   echo "watching $RAW"
   echo "debounce: ${DOPAMINE_DEBOUNCE:-15}s"
+  export DOPAMINE_SKIP_PREVIEW="$SKIP_PREVIEW"
+  [ "$SKIP_PREVIEW" = "1" ] && echo "preview checkpoint: skipped (unattended watcher)"
   echo "log: $LOG"
 
   inotifywait -m -r -e close_write,moved_to,create --format '%w%f' "$RAW" 2>/dev/null |

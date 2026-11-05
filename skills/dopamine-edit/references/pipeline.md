@@ -161,16 +161,22 @@ true peak ≤ -1 dBTP (0.2 dB measurement tolerance). Intentional pauses are fin
 
 ## 7. Finish and review
 
-Read [quality-gates.md](quality-gates.md); write exact `DELIVERY.json`, then:
+Read [quality-gates.md](quality-gates.md); write exact `DELIVERY.json`. Show the
+draft first, per [preview-checkpoint.md](preview-checkpoint.md):
 
 ```bash
+bash "$SKILL_DIR/scripts/preview.sh" "$OUT/project" "$SLUG" --json
+# present preview/<slug>-preview.mp4 + cover/contact; collect changes; repeat
+python3 "$SKILL_DIR/scripts/preview.py" approve --root "$OUT" --note "<approved>"
 bash "$SKILL_DIR/scripts/finish.sh" "$OUT/project" "$SLUG" --json
 ```
 
 Every attempt uses `final/attempt-*/`; drafts stay there. Delivery bypass flags
-are refused. JSON `ok`/`browserSkipped`, proof capture and render verification
-are required. Failures do not expose stale outputs as new successes. Existing
-MP4s are never overwritten. Success means **candidate awaiting review**.
+are refused, and a delivery render additionally requires an approval matching the
+current composition (`DOPAMINE_SKIP_PREVIEW=1` only for unattended runs). JSON
+`ok`/`browserSkipped`, proof capture and render verification are required.
+Failures do not expose stale outputs as new successes. Existing MP4s are never
+overwritten. Success means **candidate awaiting review**.
 If stable output paths already exist, the helper returns the fresh attempt's
 candidate successfully; review/mark that exact path rather than overwriting.
 

@@ -363,26 +363,32 @@ mix with `/hyperframes-audio`.
 
 ### The hit layer
 
-| Event | Sound | Level |
+| Event | Sound | Peak level |
 |-------|-------|-------|
-| Cut / transition | whoosh (0.2–0.5 s) | -12 dBFS |
-| Impact / freeze | bass impact | -6 dBFS |
-| Text appearance | pop / click / type | -18 dBFS |
-| Riser into payoff | riser (1–2 s) | -14 dBFS |
-| Glitch / digital | glitch | -10 dBFS |
-| Reveal / sparkle | sparkle / chime | -14 dBFS |
-| End / logo | chime / impact | -8 dBFS |
+| Cut / transition | whoosh (0.2–0.5 s) | -20 dBFS |
+| Impact / freeze | bass impact | -14 dBFS |
+| Text appearance | pop / click / type | -26 dBFS |
+| Riser into payoff | riser (1–2 s) | -20 dBFS |
+| Glitch / digital | glitch | -18 dBFS |
+| Reveal / sparkle | sparkle / chime | -20 dBFS |
+| End / logo | chime / impact | -16 dBFS |
+
+These are ceilings for a dialogue-led edit, not targets to reach: keep every hit
+at least 12–18 dB below the voice in that moment, and quieter when unsure.
 
 Bundled SFX live in
 `~/.config/opencode/skills/media-use/audio/assets/sfx/`.
 
 ### The mix
 
-- Voice: intelligible and consistent; -16 to -12 LUFS short-term is a guide.
-- Music under voice: -18 to -22 LUFS, high-passed at 120 Hz, carved at 2–4 kHz
-  with `/hyperframes-audio` (`carve.mjs`). A volume duck alone is not a mix.
-- SFX: peaks -6 to -3 dBFS; never mask a consonant.
-- Master: measure the final encoded mix, about -14 LUFS integrated, ≤ -1 dBTP.
+- Voice is the loudest element and must stay effortless to follow; -16 to -12
+  LUFS short-term is a guide.
+- Music under voice: **-30 to -36 LUFS** (18–24 dB below the voice), high-passed
+  at 120 Hz, carved at 2–4 kHz with `/hyperframes-audio` (`carve.mjs`) and ducked
+  6–12 dB. A volume duck alone is not a mix, and a bed near voice level is a bug.
+- SFX: peaks 12–18 dB below the voice (see the table); never mask a consonant.
+- Master: measure the final encoded mix, about -14 LUFS integrated, ≤ -1 dBTP,
+  and keep a clear loudness contrast between speech and the bed.
 - Reinforce meaningful actions; do not layer whooshes/pops on every cut/word.
 - Silence is a tool: 0.2 s of silence before a payoff makes it twice as loud.
 

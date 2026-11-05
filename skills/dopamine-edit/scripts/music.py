@@ -26,6 +26,9 @@ CATALOG = 'https://incompetech.com/music/royalty-free/pieces.json'
 PAGE = 'https://incompetech.com/music/royalty-free/music.html'
 LICENSE = 'https://creativecommons.org/licenses/by/4.0/'
 MAX_BYTES = 80 * 1024 * 1024
+BED_LUFS = -32
+BED_TP = -6
+DEFAULT_SEPARATION_DB = 16
 VOCALS = re.compile(r'\b(vocals?|vocalists?|voices?|singing|lyrics?|choirs?|choral)\b', re.I)
 NEGATED = re.compile(r'\b(no|without|not|never|free of|free from)\s+(?:\w+\s+){0,2}$', re.I)
 APPROVED_LICENSES = {'CC0', 'CC BY 3.0', 'CC BY 4.0', 'public-domain', 'user-authorized'}
@@ -79,7 +82,7 @@ def fetch(url, destination=None, max_bytes=MAX_BYTES):
                 if not block:
                     break
                 size += len(block)
-                if size > max_bytes or time.monotonic() - started > 90:
+                if size > max_bytes or time.monotonic() - started > 240:
                     raise ValueError('download exceeded size/time budget')
                 if output:
                     output.write(block)
@@ -194,28 +197,38 @@ def prepare(args):
         raise ValueError('invalid catalog filename')
     url = 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/' + urllib.parse.quote(filename)
     folder = project/'assets/audio/music'/args.id.lower()
+    folder.parent.mkdir(parents=True, exist_ok=True)
+    # Download before creating the asset folder: a failed transfer leaves nothing
+    # half-written for the next attempt to trip over.
+    handle, temp_name = tempfile.mkstemp(prefix=f'.{args.id.lower()}-', dir=folder.parent)
+    os.close(handle)
+    os.unlink(temp_name)
+    temp_original = Path(temp_name)
+    try:
+        fetch(url, temp_original)
+    except BaseException:
+        temp_original.unlink(missing_ok=True)
+        raise
     folder.mkdir(parents=True, exist_ok=False)
+    os.replace(temp_original, folder/'original.mp3')
     (folder/'license-evidence.html').write_text(evidence)
     write_json(folder/'catalog-record.json', track)
     original, bed = folder/'original.mp3', folder/'bed.wav'
-    fetch(url, original)
     original_duration = probe_audio(original)
     if args.start + args.duration > original_duration + .05:
         raise ValueError('chosen source interval does not cover edit; choose another interval/track, never silently loop')
     fade_out = min(.45, args.duration / 4)
-    filters = f'loudnorm=I=-20:TP=-3:LRA=7,afade=t=in:d={min(.12, args.duration/4)},afade=t=out:st={args.duration-fade_out}:d={fade_out}'
+    filters = (f'loudnorm=I={BED_LUFS}:TP={BED_TP}:LRA=7,'
+               f'afade=t=in:d={min(.12, args.duration/4)},afade=t=out:st={args.duration-fade_out}:d={fade_out}')
     run(['ffmpeg', '-nostdin', '-n', '-v', 'error', '-ss', str(args.start), '-i', str(original),
          '-t', str(args.duration), '-vn', '-af', filters, '-ar', '48000', '-ac', '2', '-c:a', 'pcm_s16le', str(bed)])
     duration = probe_audio(bed)
     if abs(duration - args.duration) > .05:
         raise ValueError('prepared music duration does not match the edit')
     run(['ffmpeg', '-nostdin', '-v', 'error', '-xerror', '-i', str(bed), '-f', 'null', '-'])
-    analysis = run(['ffmpeg', '-nostdin', '-hide_banner', '-i', str(bed), '-af',
-                    'loudnorm=I=-20:TP=-3:LRA=7:print_format=json', '-f', 'null', '-']).stderr
-    blocks = re.findall(r'\{[^{}]*"input_i"[^{}]*\}', analysis)
-    if not blocks or not math.isfinite(float(json.loads(blocks[-1])['input_i'])):
+    integrated = measure_lufs(bed)
+    if not math.isfinite(integrated):
         raise ValueError('prepared bed is silent or unmeasurable')
-    integrated = float(json.loads(blocks[-1])['input_i'])
     if integrated <= -50:
         raise ValueError('prepared bed is effectively silent')
     # Only metadata/measurement selection is possible without auditioning; never claim a listen.
@@ -236,9 +249,14 @@ def prepare(args):
                                'sha256': catalog_hash},
             'original': {'path': str(original.relative_to(project)), 'sha256': sha(original), 'duration': original_duration},
             'asset': {'path': str(bed.relative_to(project)), 'sha256': sha(bed), 'duration': duration,
-                      'integrated_lufs': integrated},
+                      'integrated_lufs': integrated, 'target_lufs': BED_LUFS},
             'source_start': args.start, 'duration': args.duration, 'attribution': attribution,
             'attribution_file': str((folder/'ATTRIBUTION.txt').relative_to(project)), 'timeline_id': 'bgm-bed',
+            'mix_policy': {'bed_target_lufs': BED_LUFS, 'recommended_bed_gain': '0.8-1.0',
+                           'min_separation_db': DEFAULT_SEPARATION_DB,
+                           'ducking_db_for_dialogue': '6-12',
+                           'sfx_peak_below_voice_db': '12-18',
+                           'note': 'Voice leads. The bed is mastered quiet on purpose; do not raise it to voice level.'},
             'instrumental_status': 'metadata-inferred; not auditioned',
             'review_note': 'Matched by catalog metadata; inspect available playback/measurements before final mix.'}
     data['identity'] = identity(data)
@@ -260,6 +278,17 @@ def mean_level(path):
               '-af', 'volumedetect', '-f', 'null', '-'], timeout=60)
     match = re.search(r'mean_volume:\s*(-?\d+(?:\.\d+)?) dB', cp.stderr)
     return float(match.group(1)) if match else math.nan
+
+
+def measure_lufs(path):
+    """Integrated loudness of an audio file; NaN when it cannot be measured."""
+    analysis = run(['ffmpeg', '-nostdin', '-hide_banner', '-t', '120', '-i', str(path), '-af',
+                    f'loudnorm=I={BED_LUFS}:TP={BED_TP}:LRA=7:print_format=json', '-f', 'null', '-'],
+                   timeout=180).stderr
+    blocks = re.findall(r'\{[^{}]*"input_i"[^{}]*\}', analysis)
+    if not blocks:
+        return math.nan
+    return float(json.loads(blocks[-1])['input_i'])
 
 
 def project_file(project, relative):
@@ -345,8 +374,30 @@ def check_music(root, timeline=None):
                     if not math.isfinite(value):
                         raise ValueError('background-music volume automation is invalid')
                     points.append(value)
-        if base * (max(points) if points else 1) <= .02:
+        peak_gain = base * (max(points) if points else 1)
+        if peak_gain <= .02:
             raise ValueError('background-music volume automation mutes the bed for the whole edit')
+        # Voice must lead: the loudest the bed can be still stays under the
+        # master target by at least music_separation_db (default 18 dB).
+        minimum = float(expected.get('music_separation_db', DEFAULT_SEPARATION_DB))
+        level = asset.get('integrated_lufs')
+        if minimum > 0:
+            bed_lufs = float(level) if level is not None and math.isfinite(float(level)) else measure_lufs(path)
+            if math.isfinite(bed_lufs):
+                music_level = bed_lufs + 20 * math.log10(peak_gain)
+                master = float(expected.get('target_lufs', -14))
+                separation = master - music_level
+                if separation < minimum:
+                    raise ValueError(
+                        f'background music is only {separation:.1f} dB below the voice target '
+                        f'({master:g} LUFS) at its loudest; needs >= {minimum:g} dB. Lower the bed '
+                        'level or the bgm-bed gain, or carve harder, then preview again. '
+                        'For a music-led piece with no dialogue, set music_separation_db to 0.')
+                return {'status': 'ready', 'sha256': asset['sha256'], 'identity': music.get('identity'),
+                        'track_id': music.get('track_id'), 'asset': asset['path'],
+                        'music_level_lufs': round(music_level, 1), 'separation_db': round(separation, 1),
+                        'audibility': 'bed level, timeline gain and voice separation checked; no isolated music stem rendered',
+                        'attribution': music['attribution']}
     return {'status': 'ready', 'sha256': asset['sha256'], 'identity': music.get('identity'),
             'track_id': music.get('track_id'), 'asset': asset['path'],
             'audibility': 'bed level and timeline gain/automation checked; no isolated music stem rendered',

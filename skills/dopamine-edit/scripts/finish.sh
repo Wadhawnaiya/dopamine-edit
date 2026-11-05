@@ -5,7 +5,8 @@ SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$SKILL_DIR/scripts/hf.sh"
 usage() {
   echo 'Usage: finish.sh <project-dir> <slug> [--draft] [--json]'
-  echo 'Requires ../DELIVERY.json. No check/snapshot bypasses. Success = candidate, not delivery.'
+  echo 'Requires ../DELIVERY.json and, for delivery, an approved preview.'
+  echo 'No check/snapshot bypasses. Success = candidate, not delivery.'
 }
 case "${1:-}" in -h|--help) usage; exit 0 ;; esac
 [ $# -ge 2 ] || { usage; exit 2; }
@@ -26,7 +27,8 @@ done
 PROJECT="$(cd "$PROJECT" && pwd)"
 OUT="$(cd "$PROJECT/.." && pwd)"
 EXPECT="$OUT/DELIVERY.json"
-python3 - "$SKILL_DIR/scripts" "$EXPECT" "$OUT/SOURCE.json" <<'PY'
+python3 - "$SKILL_DIR/scripts" "$EXPECT" "$OUT/SOURCE.json" "$QUALITY" <<'PY'
+import os
 import sys
 from pathlib import Path
 sys.path.insert(0, sys.argv[1])
@@ -38,6 +40,15 @@ expectations(Path(sys.argv[2]))
 validate_source_record(Path(sys.argv[3]))
 check_music(Path(sys.argv[2]).parent)
 brand_check(Path(sys.argv[2]).parent, skill_dir=Path(sys.argv[1]).parent)
+if sys.argv[4] == 'delivery' and os.environ.get('DOPAMINE_SKIP_PREVIEW') != '1':
+    from preview import verify as preview_verify
+    state = preview_verify(Path(sys.argv[2]).parent)
+    if state.get('status') != 'approved':
+        raise SystemExit(
+            'ERROR: delivery render needs an approved preview '
+            f"({state.get('status')}: {state.get('detail', '')}). Run preview.sh, show the user, "
+            'then preview.py approve --root <output>. Set DOPAMINE_SKIP_PREVIEW=1 only for an '
+            'explicitly unattended run.')
 PY
 mkdir -p "$OUT/final"
 ATTEMPT="$(mktemp -d "$OUT/final/attempt-XXXXXXXX")"

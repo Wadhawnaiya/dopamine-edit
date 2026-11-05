@@ -71,12 +71,21 @@ Mount the exact `MUSIC.json` `asset.path` with `id="bgm-bed"`,
 `data-timeline-role="music"`, one audio track, start 0, full edit duration and
 the core timing attributes. Use a real `<audio>`, not a playback JS call.
 
-Use `/hyperframes-audio` to duck/carve beneath the source voice. A prepared bed's
-level is not the final mix target; adjust gain/envelopes by actual speech and
-measure the encoded master around -14 LUFS integrated / ≤ -1 dBTP. Ensure music
-does not mask consonants, start late, end early, click or restart at every scene.
-SFX are a separate restrained layer. Music-led clips may use `/music-to-video`
-for a beat grid; spoken words remain the primary timing authority for dialogue.
+Use `/hyperframes-audio` to duck/carve beneath the source voice. **The voice is
+the loudest thing in the mix.** A prepared bed is mastered quiet on purpose
+(`-32 LUFS`): mount it at gain `0.8-1.0` and carve `6-12 dB` under speech, so it
+sits 18-24 dB below the voice (about 16 dB minimum); do not raise a bed to voice level. SFX peaks stay
+`12-18 dB` below the voice, are transient and are never stacked on every caption.
+
+Measure the encoded master around -14 LUFS integrated / ≤ -1 dBTP. The music gate
+computes the loudest possible bed level (measured bed loudness + timeline gain)
+and requires at least `music_separation_db` (default `16`) of separation from
+`target_lufs`; QA also records `voice_contrast_db` (p90-p10 momentary loudness)
+and fails when `min_voice_contrast_db` (recommended `8`) is set and the mix is
+flatter. A bed or SFX layer that is too loud flattens the whole mix and is the
+usual cause of "I can barely hear the person". SFX are a separate restrained
+layer. Music-led clips may use `/music-to-video` for a beat grid; spoken words
+remain the primary timing authority for dialogue.
 
 The finish gate re-reads `MUSIC.json` and the real HyperFrames timeline: the
 `bgm-bed` clip must use the exact prepared file and cover the full edit, keep the

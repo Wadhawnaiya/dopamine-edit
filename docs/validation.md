@@ -30,6 +30,19 @@ incomplete timeline coverage, unreadable automation, and explicit `expect_brand`
 policy. Tests for the gate build a synthetic brand stand-in; the owner's real
 photo is never committed.
 
+Preview-checkpoint cases include delivery blocked without an approval, approval
+allowing delivery, approval invalidated by a composition edit, `preview.sh`
+writing only under `preview/` (never `final/`), refusing a missing draft or a
+delivery render passed as a preview, and the unattended `DOPAMINE_SKIP_PREVIEW=1`
+bypass.
+
+Voice-priority (mix) cases include the default 16 dB bed-to-voice separation
+gate, a loud bed being refused at default and allowed when the plan explicitly
+relaxes the requirement, the encoded mix's `voice_contrast_db` measurement, and
+a strict `min_voice_contrast_db` failing a flat mix. Beds are prepared at -32
+LUFS with `music_separation_db` / `min_voice_contrast_db` validated in the
+delivery plan.
+
 ## Live smoke checks
 
 - Public catalog search returned relevant instrumental metadata.
@@ -43,6 +56,12 @@ photo is never committed.
   `bgm-bed` **and** the brand layer mounted; the finish path verified source
   identity, license evidence, attribution, brand hash and timeline coverage
   before encoding.
+- Mix policy, on a fixture with a synthetic dialogue track and a real downloaded
+  master: a bed at gain 2.0 was **refused** (13.6 dB separation, needs 16); the
+  same bed at gain 1.0 was accepted through preview → approval → delivery with
+  **−33.7 LUFS** bed level, **19.7 dB** separation, **20.1 dB** voice contrast,
+  and a master at **−14.09 LUFS / −4.35 dBTP**. The same bed at the loud gain
+  flattened contrast to 5.7 dB — the failure mode the metric catches.
 - Measured encoded mix: **−15.66 LUFS integrated**, **−3.70 dBTP**, within the
   configured −14 LUFS ±2 / ≤−1 dBTP gate. A decoded frame confirmed the sign is
   visible over the footage at the intended low opacity.

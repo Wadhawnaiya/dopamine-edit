@@ -16,6 +16,8 @@ Write `output/<slug>/DELIVERY.json` from the edit plan:
   "expect_audio": true,
   "expect_music": true,
   "expect_brand": true,
+  "music_separation_db": 16,
+  "min_voice_contrast_db": 8,
   "target_lufs": -14,
   "lufs_tolerance": 2,
   "max_true_peak_dbtp": -1
@@ -27,6 +29,13 @@ are required. Audio false is only for explicitly silent deliveries, documented
 in the brief. Never change expectations just to fit a defective encode.
 Silent delivery may omit audio or contain an all-zero AAC track; any existing
 audio is still decoded and flagged for review, but silence is not a failure.
+
+`music_separation_db` (default 16, 0 disables) and `min_voice_contrast_db`
+(default 0, recommended 8) keep the voice on top. The first is enforced from the
+measured bed loudness plus the timeline gain; the second from the encoded mix's
+momentary-loudness spread. Lowering either to pass a mix that buries speech is a
+delivery defect, not a fix. A music-led piece with no dialogue is the one case
+that sets `music_separation_db: 0` deliberately.
 
 Capture `SOURCE.json` with `scan_raw.py --record-source` **before ingestion**.
 The finish helper validates it before/after render and carries it into QA.
@@ -52,6 +61,14 @@ created before brand gating may set `legacy_project: true`; `false` is only for 
 user-requested unbranded export. The gate also re-checks the project asset hash
 against the skill asset before and after render. See
 [brand-layer.md](brand-layer.md).
+
+## Preview gate (delivery)
+Delivery renders require an approved preview of the exact composition:
+`preview.sh` records a draft under `preview/`, and `preview.py approve` binds the
+user's approval to a digest of the composition source + `DELIVERY.json`.
+`finish.sh` refuses delivery when the state is `missing`, `awaiting_review` or
+`changed`; `DOPAMINE_SKIP_PREVIEW=1` is only for an explicitly unattended run.
+See [preview-checkpoint.md](preview-checkpoint.md).
 
 ## 2. Composition
 

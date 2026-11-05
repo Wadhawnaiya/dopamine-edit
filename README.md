@@ -113,7 +113,33 @@ python3 ~/.config/opencode/skills/dopamine-edit/scripts/music.py --help
 python3 skills/dopamine-edit/scripts/test_pipeline.py
 ```
 
+## Preview before delivery
+
+You see a draft before anything is rendered at delivery quality:
+
+```bash
+bash .../scripts/preview.sh <output>/project <slug> --json   # fast draft + frames
+python3 .../scripts/preview.py approve --root <output>       # after you approve
+bash .../scripts/finish.sh <output>/project <slug> --json    # delivery render
+```
+
+The draft (MP4, cover, contact sheet, proof frames) lands in
+`<output>/preview/` and never in `final/`. `finish.sh` **refuses a delivery
+render** until an approval is bound to the exact current composition, so an
+unreviewed cut cannot ship by accident; editing after approval invalidates it and
+asks for a new preview. Unattended runs (the optional watcher service) set
+`DOPAMINE_SKIP_PREVIEW=1` explicitly. Details:
+[`skills/dopamine-edit/references/preview-checkpoint.md`](skills/dopamine-edit/references/preview-checkpoint.md).
+
 ## Music and attribution
+
+**The voice leads.** Prepared beds master at **-32 LUFS** and mount at gain
+`0.8-1.0`, carved 6-12 dB under dialogue, so music and SFX stay well below the
+speaker. `finish.sh` enforces `music_separation_db` (default 16 dB between the
+master target and the loudest the bed can be) and QA reports `voice_contrast_db`
+(p90-p10 momentary loudness); set `min_voice_contrast_db` (recommended 8) to fail
+a flat, voice-masking mix. Never raise a bed toward voice level to "hear it
+better" — that is exactly what buries the person.
 
 The built-in provider is Kevin MacLeod's public Incompetech catalog. The downloader
 checks its current CC BY 4.0 declaration and retains the selected catalog record,
@@ -163,9 +189,10 @@ brand asset outside the skill). Gate details:
 The regression suite uses synthetic media, isolated state and controlled CLI
 stand-ins. It covers real FFmpeg encode/decode and music preparation, failed
 checks, missing/unmounted/changed music, missing/unmounted/changed brand layers,
-silent audio, dimensions, safe rerenders, source identity, caption-engine
-arguments and output protection. It does not claim to test every website,
-ASR/matting model or creative outcome.
+preview blocking and approval, bed-to-voice separation and voice contrast, silent
+audio, dimensions, safe rerenders, source identity, caption-engine arguments and
+output protection. It does not claim to test every website, ASR/matting model or
+creative outcome.
 
 A real local HyperFrames smoke render and a licensed music download were also
 checked during development; generated test media is intentionally excluded.

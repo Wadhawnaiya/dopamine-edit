@@ -72,11 +72,35 @@ def expectations(path: Path) -> dict:
             raise ValueError(f'{key} must be finite')
     if not 0 <= data['lufs_tolerance'] <= 3 or data['max_true_peak_dbtp'] > -1:
         raise ValueError('invalid loudness tolerance or true-peak ceiling')
+    for key, default, ceiling in (('music_separation_db', 16, 60), ('min_voice_contrast_db', 0, 30)):
+        data.setdefault(key, default)
+        value = data[key]
+        if isinstance(value, bool) or not isinstance(value, (int, float)) \
+                or not math.isfinite(number(value)) or not 0 <= value <= ceiling:
+            raise ValueError(f'{key} must be between 0 and {ceiling}')
     return data
 
 
 def invoke(args: list[str], timeout: int) -> subprocess.CompletedProcess:
     return subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+
+
+def voice_contrast(video: Path, timeout: int) -> float:
+    """p90 - p10 of momentary loudness: how far speech rises above the bed/quiet.
+
+    A bed or SFX layer that is too loud flattens the mix toward the voice level,
+    so low contrast is a direct proxy for "the voice is hard to hear". NaN when
+    the mix is too short or unmeasurable; never used as a hard gate by default.
+    """
+    cp = invoke(['ffmpeg', '-nostdin', '-hide_banner', '-i', str(video), '-vn',
+                 '-af', 'ebur128=metadata=1,ametadata=mode=print:file=-', '-f', 'null', '-'], timeout)
+    values = [float(m) for m in re.findall(r'lavfi\.r128\.M=(-?\d+\.?\d*)', cp.stdout)]
+    values = sorted(v for v in values if math.isfinite(v) and v > -70)
+    if len(values) < 10:
+        return math.nan
+    low = values[min(len(values) - 1, int(len(values) * .10))]
+    high = values[min(len(values) - 1, int(len(values) * .90))]
+    return high - low
 
 
 def verify(video: Path, expected: dict, report: Path, proof_dir: Path) -> dict:
@@ -155,6 +179,14 @@ def verify(video: Path, expected: dict, report: Path, proof_dir: Path) -> dict:
                 failures.append('master_loudness_out_of_range')
             if not math.isfinite(peak) or peak > expected['max_true_peak_dbtp'] + 0.2:
                 failures.append('true_peak_out_of_range')
+        contrast = voice_contrast(video, timeout)
+        if math.isfinite(contrast):
+            measured['voice_contrast_db'] = round(contrast, 1)
+            minimum = expected.get('min_voice_contrast_db', 0) or 0
+            if minimum > 0 and contrast < minimum:
+                failures.append(f'voice_contrast_{contrast:.1f}db_below_{minimum:g}db')
+            elif contrast < 6:
+                warnings.append('low_voice_contrast_music_or_sfx_may_mask_the_voice')
     elif a:
         warnings.append('audio_stream_present_in_silent_delivery_review_for_unintended_sound')
     cp = invoke(['ffmpeg', '-nostdin', '-hide_banner', '-i', str(video), '-an',

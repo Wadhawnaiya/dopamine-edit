@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import math
 import os
 from pathlib import Path
 import shutil
@@ -88,6 +89,7 @@ raise SystemExit('unexpected test CLI command: '+repr(a))
                         TEST_COMMAND_LOG=str(self.case/'commands.jsonl'), TEST_RENDER_VIDEO=str(self.good),
                         DOPAMINE_STATE_DIR=str(self.case/'state'), DOPAMINE_CACHE_DIR=str(self.case/'cache'),
                         DOPAMINE_BRAND_DIR=str(self.case/'branddir'),
+                        DOPAMINE_SKIP_PREVIEW='1',
                         PYTHONDONTWRITEBYTECODE='1')
         self.expected = {'duration': 2, 'width': 160, 'height': 288, 'fps': 30, 'expect_audio': True,
                          'expect_music': False, 'music_exception': 'Synthetic regression fixture without music.',
@@ -355,7 +357,7 @@ raise SystemExit('unexpected test CLI command: '+repr(a))
                   'license_evidence': {'statement': 'Synthetic test metadata, not real license proof.'},
                   'attribution': attribution,
                   'asset': {'path': str(bed.relative_to(out/'project')), 'sha256': music.sha(bed),
-                            'duration': 2, 'integrated_lufs': -20},
+                            'duration': 2, 'integrated_lufs': -30, 'target_lufs': -30},
                   'timeline_id': 'bgm-bed'}
         if builtin:
             folder = bed.parent
@@ -554,6 +556,106 @@ raise SystemExit('unexpected test CLI command: '+repr(a))
             with patch.dict(os.environ, {'DOPAMINE_BRAND_DIR': str(self.ensure_brand_dir())}):
                 with self.assertRaises(ValueError, msg=str(change)):
                     brand.check(out, candidate)
+
+    def preview_approve(self, out, slug='fixture', note='User reviewed the draft in chat.'):
+        draft = out/'preview'/f'{slug}-draft.mp4'
+        draft.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(self.good, draft)
+        recorded = self.run_script('preview.py', 'record', '--root', out, '--slug', slug,
+                                   '--video', draft, '--qa', out/'preview'/'draft-qa.json')
+        self.assertEqual(recorded.returncode, 0, recorded.stderr)
+        approved = self.run_script('preview.py', 'approve', '--root', out, '--note', note)
+        self.assertEqual(approved.returncode, 0, approved.stderr)
+        return json.loads(approved.stdout)
+
+    def test_delivery_requires_approved_preview(self):
+        out = self.project()
+        unattended = {k: v for k, v in self.env.items() if k != 'DOPAMINE_SKIP_PREVIEW'}
+        blocked = self.run_script('finish.sh', out/'project', 'fixture', env=unattended)
+        self.assertNotEqual(blocked.returncode, 0)
+        self.assertIn('approved preview', blocked.stderr)
+        self.assertFalse((out/'final/fixture.mp4').exists())
+        self.preview_approve(out)
+        allowed = self.run_script('finish.sh', out/'project', 'fixture', env=unattended)
+        self.assertEqual(allowed.returncode, 0, allowed.stderr)
+        self.assertEqual(json.loads(allowed.stdout)['status'], 'candidate_awaiting_review')
+
+    def test_preview_approval_invalidated_by_composition_edit(self):
+        out = self.project()
+        (out/'project/index.html').write_text('<div id="root"></div>\n')
+        self.preview_approve(out)
+        self.run_script('preview.py', 'verify', '--root', out)
+        (out/'project/index.html').write_text('<div id="root">changed</div>\n')
+        check = self.run_script('preview.py', 'verify', '--root', out)
+        self.assertEqual(json.loads(check.stdout)['status'], 'changed')
+        unattended = {k: v for k, v in self.env.items() if k != 'DOPAMINE_SKIP_PREVIEW'}
+        blocked = self.run_script('finish.sh', out/'project', 'fixture', env=unattended)
+        self.assertNotEqual(blocked.returncode, 0)
+        approve_again = self.run_script('preview.py', 'approve', '--root', out)
+        self.assertNotEqual(approve_again.returncode, 0)
+        self.assertIn('changed since the preview', approve_again.stderr)
+
+    def test_preview_sh_writes_preview_only_and_records(self):
+        out = self.project()
+        result = self.run_script('preview.sh', out/'project', 'fixture', '--json')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        summary = json.loads(result.stdout)
+        self.assertEqual(summary['status'], 'awaiting_review')
+        self.assertTrue(Path(summary['video']).is_file())
+        self.assertIn('preview.py approve', summary['approve_command'])
+        record = json.loads((out/'preview/PREVIEW.json').read_text())
+        self.assertEqual(record['status'], 'awaiting_review')
+        self.assertEqual(record['quality'], 'draft')
+        self.assertFalse((out/'final/fixture.mp4').exists())
+        preview_video = out/'preview/fixture-preview.mp4'
+        with self.assertRaises(ValueError):
+            module('preview').record(argparse.Namespace(
+                root=str(out), slug='fixture', video=str(out/'preview/missing.mp4'), cover=None,
+                contact=None, qa=str(out/'preview/fixture-preview-qa.json'), attempt=None))
+        with self.assertRaises(ValueError):
+            module('preview').record(argparse.Namespace(
+                root=str(out), slug='fixture', video=str(out/'final/fixture.mp4'), cover=None,
+                contact=None, qa=None, attempt=None))
+        self.assertTrue(preview_video.is_file())
+
+    def test_skip_preview_env_allows_unattended_delivery(self):
+        out = self.project()
+        result = self.run_script('finish.sh', out/'project', 'fixture')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((out/'final/fixture.mp4').is_file())
+        self.assertFalse((out/'preview/PREVIEW.json').exists())
+
+    def test_music_level_separation_gate(self):
+        out = self.project()
+        music, record, timeline = self.music_fixture(out)
+        ready = music.check_music(out, timeline)
+        self.assertGreaterEqual(ready['separation_db'], 18)
+        self.assertAlmostEqual(ready['music_level_lufs'], -30 + 20 * math.log10(.3), places=1)
+        loud = json.loads(json.dumps(timeline))
+        loud['timeline']['tracks'][0]['rows'][0]['volume'] = 1.0
+        record['asset']['integrated_lufs'] = -20
+        (out/'MUSIC.json').write_text(json.dumps(record))
+        with self.assertRaises(ValueError):
+            music.check_music(out, loud)
+        relaxed = dict(self.expected, expect_music=True, music_separation_db=6)
+        (out/'DELIVERY.json').write_text(json.dumps(relaxed))
+        self.assertEqual(music.check_music(out, loud)['status'], 'ready')
+
+    def test_voice_contrast_gate_and_measurement(self):
+        out = self.project()
+        result = self.verify(self.good)
+        self.assertTrue(result['ok'], result['failures'])
+        self.assertIn('voice_contrast_db', result['measurements'])
+        strict = dict(self.expected, min_voice_contrast_db=40)
+        (out/'DELIVERY.json').write_text(json.dumps(strict))
+        strict_result = self.verify(self.good, strict)
+        self.assertFalse(strict_result['ok'])
+        self.assertTrue(any('voice_contrast' in f for f in strict_result['failures']))
+        bad = {k: v for k, v in self.expected.items() if k != 'min_voice_contrast_db'}
+        bad['min_voice_contrast_db'] = 99
+        path = self.case/'DELIVERY.json'
+        path.write_text(json.dumps(bad))
+        with self.assertRaises(ValueError): self.verify_module.expectations(path)
 
     def test_brand_cutout_produces_transparent_asset(self):
         if not shutil.which('magick'):
