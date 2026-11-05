@@ -102,6 +102,11 @@ duration. After scaffolding, download/prepare the selected track into the projec
 set `expect_music: true`, mount `bgm-bed`, then duck/carve under speech. No random
 music before analysis, no unlicensed reference-song ripping, no silent omission.
 
+Install the brand layer into every project after scaffolding
+(`brand.py install --project ...`), mount `brand-layer` for the full duration and
+set `expect_brand: true`; see `brand-layer.md`. This is the owner's own neon
+sign, not optional decoration.
+
 ## 4. Plan, matte, scaffold
 
 `BRIEF.md`: `workflow: general-video`, `flow: automation`, `storyboard: no`,

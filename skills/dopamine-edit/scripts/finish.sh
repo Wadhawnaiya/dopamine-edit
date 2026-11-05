@@ -33,9 +33,11 @@ sys.path.insert(0, sys.argv[1])
 from verify_render import expectations
 from scan_raw import validate_source_record
 from music import check_music
+from brand import check as brand_check
 expectations(Path(sys.argv[2]))
 validate_source_record(Path(sys.argv[3]))
 check_music(Path(sys.argv[2]).parent)
+brand_check(Path(sys.argv[2]).parent, skill_dir=Path(sys.argv[1]).parent)
 PY
 mkdir -p "$OUT/final"
 ATTEMPT="$(mktemp -d "$OUT/final/attempt-XXXXXXXX")"
@@ -45,6 +47,7 @@ trap 'status=$?; if [ "$status" -ne 0 ]; then echo "ERROR: candidate not accepte
 cd "$PROJECT"
 "${HF[@]}" timeline --json > "$ATTEMPT/timeline.json" 2> "$LOG"
 python3 "$SKILL_DIR/scripts/music.py" check --root "$OUT" --timeline "$ATTEMPT/timeline.json" > "$ATTEMPT/music-check.json"
+python3 "$SKILL_DIR/scripts/brand.py" check --root "$OUT" --timeline "$ATTEMPT/timeline.json" > "$ATTEMPT/brand-check.json"
 echo "Checking composition; evidence: $ATTEMPT" >&2
 "${HF[@]}" check --json --snapshots > "$ATTEMPT/check.json" 2>> "$LOG"
 python3 - "$ATTEMPT/check.json" <<'PY'
@@ -82,9 +85,11 @@ qa, quality, root, slug = Path(sys.argv[1]), sys.argv[2], Path(sys.argv[3]), sys
 sys.path.insert(0, sys.argv[5])
 from scan_raw import validate_source_record
 from music import check_music
+from brand import check as brand_check
 d = json.loads(qa.read_text())
 d['source'] = validate_source_record(root/'SOURCE.json')
 d['music'] = check_music(root, json.loads((qa.parent/'timeline.json').read_text()))
+d['brand'] = brand_check(root, json.loads((qa.parent/'timeline.json').read_text()), Path(sys.argv[5]).parent)
 d['quality'] = quality
 d['status'] = 'candidate_awaiting_review'
 d['composition_check'] = str(qa.parent/'check.json')
@@ -113,5 +118,5 @@ if d['music'].get('status') == 'ready':
     qa.write_text(json.dumps(d, indent=2) + '\n')
 print(json.dumps({'status': d['status'], 'video': d['video'], 'cover': d['cover'],
                   'contact': d['contact'], 'qa': str(qa), 'quality': quality,
-                  'music_credits': d.get('music_credits')}, indent=2))
+                  'music_credits': d.get('music_credits'), 'brand': d['brand'].get('status')}, indent=2))
 PY

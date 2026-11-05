@@ -3,7 +3,8 @@ name: dopamine-edit
 description: >
   Edit raw footage in a video_editing/raw folder into high-retention,
   sound-designed HyperFrames videos with transcript-led cuts, captions, licensed
-  background music selected/downloaded after footage analysis, and layered
+  background music selected/downloaded after footage analysis, the channel's
+  neon brand layer on every video, and layered
   motion graphics. Research references across the web, Instagram, YouTube, X,
   Reddit, LinkedIn and other supported sites using Agent-Reach when available
   and yt-dlp for supported public video references. Use for "dopamine edit",
@@ -61,7 +62,7 @@ output/<unique-slug>/
   BRIEF.md          # workflow: general-video; flow: automation; storyboard: no
   STORYBOARD.md     # timed beats and scene sources
   EDIT.md           # source-to-output edit map, layers, audio, exceptions
-  DELIVERY.json     # expected duration, width, height, fps, expect_audio/music
+  DELIVERY.json     # expected duration, width, height, fps, expect_audio/music/brand/brand
   REVIEW.json       # evidence-backed review of this exact MP4
   MUSIC.md          # footage-led music brief, shortlist decision and cue plan
   MUSIC.json        # downloaded bed, source/license, hash, duration, credits
@@ -86,6 +87,8 @@ recipes are defaults, not requirements that override speech or truth.
 1. Run `bash "$SKILL_DIR/scripts/bootstrap.sh"`. It checks tools without global
    updates or installations. Use its reported HyperFrames CLI, not a desktop
    executable with the same name. Record/pin the working CLI version for the run.
+   It also reports whether the brand layer is built; building it is maintenance,
+   so ask before running `brand-cutout.sh` on a new photo.
 2. Run `python3 "$SKILL_DIR/scripts/scan_raw.py" --root "$PROJECT_ROOT" --json --all`.
    Process pending sources oldest first unless the user names one. Distinguish
    an empty folder from "all footage already processed"; show recent deliveries
@@ -227,6 +230,15 @@ mount the exact asset as `<audio id="bgm-bed">` on its own
 music track and mix it under dialogue. Do not stop at downloading: the finish
 gate checks the actual timeline references it. See the music guide for commands.
 
+**Every video carries the brand layer.** Read
+[brand-layer.md](references/brand-layer.md), install the owner's neon cutout with
+`scripts/brand.py install --project "$OUT/project"`, and mount it once at the
+composition root as `<img id="brand-layer" src="assets/brand/logo.png">` covering
+the **full** duration on its own graphics track (default a dimmed backdrop; a
+brighter lockup is fine for intros/titles). Set `expect_brand: true`; only an
+explicit user request for an unbranded export takes `false`. Keep captions/text
+above it. Never swap or hand-edit the asset while a candidate is pending review.
+
 Search `/hyperframes-registry` for named looks before hand-building. Build a
 representative slice first: footage + graphics + captions + audio. Seek opening,
 midpoint and end out of order; verify before scaling up the design.
@@ -261,7 +273,9 @@ The helper gates `check` on JSON semantics (including a browser audit), captures
 proof frames, renders in a fresh attempt directory, then checks the decoded MP4
 against `DELIVERY.json`. It preserves raw ffprobe metadata and rejects missing
 streams, duration/size/FPS mismatches, decode errors, silence and loudness/peak
-failures. It does **not** declare visual/caption correctness automatically.
+failures. It also refuses to accept a candidate whose required licensed music or
+brand layer is missing, changed or unmounted. It does **not** declare
+visual/caption correctness automatically.
 
 Before a delivery render, open the local Studio preview per `/hyperframes` and
 verify its project URL responds; offer it as an editable surface without an

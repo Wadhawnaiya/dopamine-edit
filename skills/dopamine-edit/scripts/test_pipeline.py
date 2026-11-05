@@ -87,9 +87,11 @@ raise SystemExit('unexpected test CLI command: '+repr(a))
         self.env = dict(os.environ, PATH=str(self.bin)+os.pathsep+os.environ['PATH'],
                         TEST_COMMAND_LOG=str(self.case/'commands.jsonl'), TEST_RENDER_VIDEO=str(self.good),
                         DOPAMINE_STATE_DIR=str(self.case/'state'), DOPAMINE_CACHE_DIR=str(self.case/'cache'),
+                        DOPAMINE_BRAND_DIR=str(self.case/'branddir'),
                         PYTHONDONTWRITEBYTECODE='1')
         self.expected = {'duration': 2, 'width': 160, 'height': 288, 'fps': 30, 'expect_audio': True,
                          'expect_music': False, 'music_exception': 'Synthetic regression fixture without music.',
+                         'expect_brand': False,
                          'target_lufs': -14, 'lufs_tolerance': 2, 'max_true_peak_dbtp': -1}
 
     def run_script(self, script, *args, env=None):
@@ -479,6 +481,99 @@ raise SystemExit('unexpected test CLI command: '+repr(a))
         with self.assertRaises(ValueError): self.verify_module.expectations(path)
         path.write_text(json.dumps(dict(base, legacy_project=True)))
         self.verify_module.expectations(path)
+
+    def test_new_project_requires_explicit_brand_policy(self):
+        path = self.case/'DELIVERY.json'
+        base = {k: v for k, v in self.expected.items() if k != 'expect_brand'}
+        path.write_text(json.dumps(base))
+        with self.assertRaises(ValueError): self.verify_module.expectations(path)
+        path.write_text(json.dumps(dict(base, legacy_project=True)))
+        self.verify_module.expectations(path)
+
+    def ensure_brand_dir(self):
+        folder = self.case/'branddir'
+        folder.mkdir(exist_ok=True)
+        logo = folder/'logo.png'
+        if not logo.is_file():
+            subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-f', 'lavfi',
+                            '-i', 'color=c=0xffcc00:s=64x32', '-frames:v', '1', str(logo)], check=True)
+            (folder/'logo.json').write_text(json.dumps({
+                'asset_sha256': module('brand').sha(logo), 'width': 64, 'height': 32,
+                'source': 'synthetic.png', 'recipe_version': 1,
+                'note': 'Synthetic regression brand stand-in; not a real brand asset.'}))
+        return folder
+
+    def brand_fixture(self, out):
+        self.ensure_brand_dir()
+        (out/'DELIVERY.json').write_text(json.dumps(dict(self.expected, expect_brand=True)))
+        result = self.run_script('brand.py', 'install', '--project', out/'project')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        timeline = {'timeline': {'tracks': [
+            {'kind': 'video', 'rows': [{'id': 'clip', 'kind': 'video', 'src': 'assets/source.mp4',
+                                        'absStart': 0, 'absEnd': 2, 'duration': 2, 'mediaStart': 0,
+                                        'pendingReason': None, 'laneError': None}]},
+            {'kind': 'graphics', 'rows': [{'id': 'brand-layer', 'kind': 'img', 'src': 'assets/brand/logo.png',
+                                           'absStart': 0, 'absEnd': 2, 'duration': 2, 'mediaStart': None,
+                                           'pendingReason': None, 'laneError': None}]},
+        ]}}
+        return timeline
+
+    def test_brand_required_missing_or_unmounted_blocks_finish(self):
+        out = self.project()
+        (out/'DELIVERY.json').write_text(json.dumps(dict(self.expected, expect_brand=True)))
+        self.assertNotEqual(self.run_script('finish.sh', out/'project', 'fixture').returncode, 0)
+        self.brand_fixture(out)
+        unmounted = self.run_script('finish.sh', out/'project', 'fixture')
+        self.assertNotEqual(unmounted.returncode, 0)
+        self.assertFalse((out/'final/fixture.mp4').exists())
+
+    def test_brand_gated_installed_and_tamper_rejected(self):
+        out = self.project()
+        timeline = self.brand_fixture(out)
+        brand = module('brand')
+        result = self.run_script('finish.sh', out/'project', 'fixture',
+                                 env=dict(self.env, TEST_TIMELINE_JSON=json.dumps(timeline)))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        qa = json.loads(Path(json.loads(result.stdout)['qa']).read_text())
+        self.assertEqual(qa['brand']['status'], 'ready')
+        target = out/'project/assets/brand/logo.png'
+        target.write_bytes(target.read_bytes() + b'x')
+        with patch.dict(os.environ, {'DOPAMINE_BRAND_DIR': str(self.ensure_brand_dir())}):
+            with self.assertRaises(ValueError):
+                brand.check(out, timeline)
+        self.assertTrue((out/'project/assets/brand/BRAND.json').is_file())
+
+    def test_brand_timeline_mismatch_rejected(self):
+        out = self.project()
+        timeline = self.brand_fixture(out)
+        brand = module('brand')
+        for change in ({'id': 'other'}, {'src': 'assets/brand/other.png'}, {'absEnd': 1.0, 'duration': 1.0},
+                       {'laneError': 'bad automation'}):
+            candidate = json.loads(json.dumps(timeline))
+            candidate['timeline']['tracks'][1]['rows'][0].update(change)
+            with patch.dict(os.environ, {'DOPAMINE_BRAND_DIR': str(self.ensure_brand_dir())}):
+                with self.assertRaises(ValueError, msg=str(change)):
+                    brand.check(out, candidate)
+
+    def test_brand_cutout_produces_transparent_asset(self):
+        if not shutil.which('magick'):
+            self.skipTest('ImageMagick required')
+        work = self.case/'brandsrc'
+        work.mkdir()
+        source = work/'source.png'
+        subprocess.run(['magick', '-size', '400x300', 'xc:#05070b', '-fill', '#ffe14d',
+                        '-draw', 'circle 200,160 200,80', '-fill', '#37c6ff',
+                        '-draw', 'circle 300,100 300,70', '-depth', '8', str(source)], check=True)
+        out = work/'out'
+        result = self.run_script('brand-cutout.sh', source, '--outdir', out, '--json')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        record = json.loads((out/'logo.json').read_text())
+        self.assertGreater(record['alpha_coverage'], 0.005)
+        channels = subprocess.run(['magick', 'identify', '-format', '%[channels]', str(out/'logo.png')],
+                                  capture_output=True, text=True, check=True).stdout
+        self.assertIn('a', channels)
+        again = self.run_script('brand-cutout.sh', source, '--outdir', out, '--json')
+        self.assertIn('up to date', again.stdout)
 
     def test_music_prepare_download_decode_and_license_gate(self):
         music = module('music')

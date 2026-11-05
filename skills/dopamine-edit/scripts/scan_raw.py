@@ -115,6 +115,11 @@ def validate_delivery(output: Path, target: Path) -> dict:
             raise ValueError('music provenance changed after verified render')
         if not (output/'MUSIC.md').is_file():
             raise ValueError('missing footage-led music brief MUSIC.md')
+    if expected.get('expect_brand') is True:
+        from brand import check as brand_check
+        brand = brand_check(output)
+        if qa.get('brand', {}).get('asset_sha256') != brand['asset_sha256']:
+            raise ValueError('brand layer changed after verified render')
     if qa.get('ok') is not True or qa.get('quality') != 'delivery':
         raise ValueError('delivery-quality automated QA has not passed')
     if Path(qa['video']).resolve() != video or qa.get('expected') != expected:

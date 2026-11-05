@@ -23,6 +23,13 @@ replaced beds, changed license evidence, catalog record, attribution or identity
 explicit-policy omission and legacy-project handling. Existing
 rendering/source-review protections remain in the same suite.
 
+Brand-layer cases include the deterministic luminance×saturation cutout (alpha
+present, coverage recorded, idempotent rebuild), install into a project, refusal
+when the project image differs, changed asset hash, wrong clip id or `src`,
+incomplete timeline coverage, unreadable automation, and explicit `expect_brand`
+policy. Tests for the gate build a synthetic brand stand-in; the owner's real
+photo is never committed.
+
 ## Live smoke checks
 
 - Public catalog search returned relevant instrumental metadata.
@@ -30,11 +37,15 @@ rendering/source-review protections remain in the same suite.
 - The current CC BY declaration, selected catalog record and attribution were
   retained outside the repository.
 - A 12-second bed was trimmed/faded, probed and decoded.
+- The brand cutout was built from the owner's photo (recipe v1, alpha coverage
+  16.7%), installed into the project and mounted as `brand-layer`.
 - A small real HyperFrames project rendered with that downloaded bed mounted as
-  `bgm-bed`; the finish path verified source identity, license evidence,
-  attribution and timeline coverage before encoding.
+  `bgm-bed` **and** the brand layer mounted; the finish path verified source
+  identity, license evidence, attribution, brand hash and timeline coverage
+  before encoding.
 - Measured encoded mix: **−15.66 LUFS integrated**, **−3.70 dBTP**, within the
-  configured −14 LUFS ±2 / ≤−1 dBTP gate.
+  configured −14 LUFS ±2 / ≤−1 dBTP gate. A decoded frame confirmed the sign is
+  visible over the footage at the intended low opacity.
 
 The smoke fixture is technical test media, not an artistic sample or a delivery
 made from anyone's footage. The music was measured, **not listened to**. No

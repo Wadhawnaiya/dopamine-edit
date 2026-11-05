@@ -8,6 +8,9 @@ credentials*
 cookies*
 raw/
 output/
+reference/
+skills/dopamine-edit/assets/brand/*
+!skills/dopamine-edit/assets/brand/BRAND.md
 final/
 renders/
 .media/

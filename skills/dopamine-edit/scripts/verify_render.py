@@ -60,6 +60,12 @@ def expectations(path: Path) -> dict:
             raise ValueError('required music conflicts with silent delivery')
         if not data['expect_music'] and not str(data.get('music_exception', '')).strip():
             raise ValueError('expect_music false requires a documented music_exception')
+    if 'expect_brand' not in data:
+        if data.get('legacy_project') is not True:
+            raise ValueError('new delivery plans must state expect_brand true or false '
+                             '(legacy_project:true only for projects created before brand gating)')
+    elif not isinstance(data['expect_brand'], bool):
+        raise ValueError('expect_brand must be boolean')
     for key, default in (('target_lufs', -14), ('lufs_tolerance', 2), ('max_true_peak_dbtp', -1)):
         data.setdefault(key, default)
         if isinstance(data[key], bool) or not isinstance(data[key], (int, float)) or not math.isfinite(number(data[key])):

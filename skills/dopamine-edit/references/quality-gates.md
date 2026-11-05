@@ -15,6 +15,7 @@ Write `output/<slug>/DELIVERY.json` from the edit plan:
   "fps": 30,
   "expect_audio": true,
   "expect_music": true,
+  "expect_brand": true,
   "target_lufs": -14,
   "lufs_tolerance": 2,
   "max_true_peak_dbtp": -1
@@ -42,6 +43,15 @@ to omit the field. Required music may not disappear silently on a download
 failure. Credits are copied beside the candidate; carry them into the posting
 description/caption as required. Audibility is checked from bed level and
 timeline gain/automation, not an isolated stem — state that limit honestly.
+
+New edits must also state `expect_brand` explicitly (`true` by default): the
+owner's neon cutout must be installed (`brand.py install`) and mounted at the
+root as a full-duration `brand-layer` clip with the exact
+`assets/brand/logo.png` source, resolved timing and full coverage. A project
+created before brand gating may set `legacy_project: true`; `false` is only for a
+user-requested unbranded export. The gate also re-checks the project asset hash
+against the skill asset before and after render. See
+[brand-layer.md](brand-layer.md).
 
 ## 2. Composition
 

@@ -70,11 +70,13 @@ if [ "$REFRESH" -eq 1 ]; then
   fi
 fi
 COMMIT="$(git -C "$REFS_DIR" rev-parse --short HEAD 2>/dev/null || true)"
-python3 - "$STATE_DIR" "$CACHE_DIR" "$HF_VERSION" "$COMMIT" <<'PY'
+BRAND_DIR="${DOPAMINE_BRAND_DIR:-$SKILL_DIR/assets/brand}"
+REFERENCE_SRC="${DOPAMINE_ROOT:-$HOME/Work/video_editing}/reference/bg.jpg"
+python3 - "$STATE_DIR" "$CACHE_DIR" "$HF_VERSION" "$COMMIT" "$BRAND_DIR" "$REFERENCE_SRC" <<'PY'
 import json, os, shutil, sys
 from datetime import datetime, timezone
 from pathlib import Path
-state, cache, version, commit = sys.argv[1:]
+state, cache, version, commit, brand_dir, reference_src = sys.argv[1:]
 state = Path(state)
 try:
     doctor = json.loads((state / 'doctor.json').read_text())
@@ -97,6 +99,8 @@ data = {
     'hyperframes': version.strip(), 'refs_commit': commit or None, 'refs_count': count,
     'optional_tools': {n: shutil.which(n) for n in ('agent-reach', 'yt-dlp', 'whisper-cli')},
     'doctor_ok': doctor['ok'], 'required_findings': required_findings,
+    'brand': {'ready': (Path(brand_dir) / 'logo.png').is_file(), 'asset_dir': brand_dir,
+              'source_hint': reference_src if Path(reference_src).is_file() else None},
 }
 tmp = state / 'setup.json.tmp'
 tmp.write_text(json.dumps(data, indent=2) + '\n')
@@ -106,4 +110,11 @@ if required_findings:
     raise SystemExit('ERROR: required render dependencies failed; inspect doctor.json')
 if not doctor['ok']:
     print('WARN: doctor has optional/unclassified findings; inspect before rendering', file=sys.stderr)
+if not data['brand']['ready']:
+    hint = data['brand']['source_hint'] or '<your-sign-photo.jpg>'
+    print(f"WARN: brand layer not built; run brand-cutout.sh \"{hint}\" "
+          f"--outdir \"{data['brand']['asset_dir']}\" (maintenance; ask the user first)", file=sys.stderr)
 PY
+if [ "$QUIET" -eq 0 ] && [ ! -f "$BRAND_DIR/logo.png" ]; then
+  say 'note: brand layer not built yet; new edits need it (see references/brand-layer.md)'
+fi

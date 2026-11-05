@@ -12,10 +12,11 @@ delivery checks.
 3. Writes a music brief from the actual story, emotion, speech density and length.
 4. Searches public licensed instrumental music, downloads a selected track and
    prepares a trimmed/faded local bed with license evidence and credit text.
-5. Mounts the bed in the composition and mixes it under dialogue.
-6. Checks the composition, encoded video/audio, required music provenance and
-   actual timeline use, dimensions/FPS/duration, loudness and review evidence
-   before marking done.
+5. Installs the channel's neon brand layer into the project, mounts it for the
+   full duration and mixes music under dialogue.
+6. Checks the composition, encoded video/audio, required music provenance, the
+   brand layer's hash/timeline use, dimensions/FPS/duration, loudness and review
+   evidence before marking done.
 
 This is an **agent workflow**, not an unattended all-in-one video-editor binary.
 An agent performs creative decisions and calls the bundled deterministic helpers.
@@ -113,13 +114,39 @@ sessions or third-party skill source is distributed here. External tools,
 catalogs, music, fonts and templates retain their own licenses. Public repository
 visibility by itself does not grant rights to those dependencies/assets.
 
+## Brand layer
+
+Every edit mounts the channel's neon sign as a permanent brand layer. It is the
+owner's own photo, cut out with a deterministic ImageMagick key
+(`scripts/brand-cutout.sh`, luminance × saturation) into a transparent PNG; the
+dark curtain is removed, the acrylic mount and tube glow stay part of the sign.
+
+1. Build the asset once:
+
+   ```bash
+   bash skills/dopamine-edit/scripts/brand-cutout.sh /path/to/your-sign-photo.jpg \
+     --outdir skills/dopamine-edit/assets/brand
+   ```
+
+2. For each project: `python3 .../scripts/brand.py install --project <project>`
+   and mount `<img id="brand-layer" src="assets/brand/logo.png">` for the full
+   duration (default a dimmed backdrop; captions/text above it).
+3. Set `expect_brand: true` in `DELIVERY.json`. `finish.sh` then refuses a
+   candidate whose brand layer is missing, changed, or not covering the edit.
+
+This repository does **not** ship a personal brand image: the asset directory is
+gitignored, so build it from your own photo (set `DOPAMINE_BRAND_DIR` to keep the
+brand asset outside the skill). Gate details:
+[`skills/dopamine-edit/references/brand-layer.md`](skills/dopamine-edit/references/brand-layer.md).
+
 ## Tests and limits
 
 The regression suite uses synthetic media, isolated state and controlled CLI
 stand-ins. It covers real FFmpeg encode/decode and music preparation, failed
-checks, missing/unmounted/changed music, silent audio, dimensions, safe rerenders,
-source identity, caption-engine arguments and output protection. It does not
-claim to test every website, ASR/matting model or creative outcome.
+checks, missing/unmounted/changed music, missing/unmounted/changed brand layers,
+silent audio, dimensions, safe rerenders, source identity, caption-engine
+arguments and output protection. It does not claim to test every website,
+ASR/matting model or creative outcome.
 
 A real local HyperFrames smoke render and a licensed music download were also
 checked during development; generated test media is intentionally excluded.
