@@ -89,6 +89,7 @@ raise SystemExit('unexpected test CLI command: '+repr(a))
                         DOPAMINE_STATE_DIR=str(self.case/'state'), DOPAMINE_CACHE_DIR=str(self.case/'cache'),
                         PYTHONDONTWRITEBYTECODE='1')
         self.expected = {'duration': 2, 'width': 160, 'height': 288, 'fps': 30, 'expect_audio': True,
+                         'expect_music': False, 'music_exception': 'Synthetic regression fixture without music.',
                          'target_lufs': -14, 'lufs_tolerance': 2, 'max_true_peak_dbtp': -1}
 
     def run_script(self, script, *args, env=None):
@@ -337,7 +338,7 @@ raise SystemExit('unexpected test CLI command: '+repr(a))
         self.assertIn('"DOPAMINE_STATE_DIR='+env['DOPAMINE_STATE_DIR']+'"', unit)
         self.assertIn('WorkingDirectory="'+env['DOPAMINE_ROOT']+'"', unit)
 
-    def music_fixture(self, out):
+    def music_fixture(self, out, builtin=False):
         music = module('music')
         bed = out/'project/assets/audio/music/test/bed.wav'
         bed.parent.mkdir(parents=True)
@@ -345,17 +346,38 @@ raise SystemExit('unexpected test CLI command: '+repr(a))
                         '-c:a', 'pcm_s16le', str(bed)], check=True)
         expected = dict(self.expected, expect_music=True)
         (out/'DELIVERY.json').write_text(json.dumps(expected))
+        attribution = 'Synthetic fixture attribution for tests only.\n'
         record = {'status': 'ready', 'choice_reason': 'Sparse instrumental matches the educational synthetic fixture.',
                   'track_id': 'TEST-MUSIC', 'license': 'CC BY 4.0',
                   'license_url': 'https://creativecommons.org/licenses/by/4.0/',
                   'license_evidence': {'statement': 'Synthetic test metadata, not real license proof.'},
-                  'attribution': 'Synthetic fixture attribution for tests only.\n',
-                  'asset': {'path': str(bed.relative_to(out/'project')), 'sha256': music.sha(bed), 'duration': 2},
+                  'attribution': attribution,
+                  'asset': {'path': str(bed.relative_to(out/'project')), 'sha256': music.sha(bed),
+                            'duration': 2, 'integrated_lufs': -20},
                   'timeline_id': 'bgm-bed'}
+        if builtin:
+            folder = bed.parent
+            (folder/'license-evidence.html').write_text('Attribution Code Kevin MacLeod ' + music.LICENSE)
+            (folder/'catalog-record.json').write_text('{"title": "Test"}')
+            (folder/'original.mp3').write_bytes(bed.read_bytes())
+            (folder/'ATTRIBUTION.txt').write_text(attribution)
+            record.update({
+                'provider': 'incompetech',
+                'license_evidence': {'file': str((folder/'license-evidence.html').relative_to(out/'project')),
+                                     'sha256': music.sha(folder/'license-evidence.html')},
+                'catalog_record': {'path': str((folder/'catalog-record.json').relative_to(out/'project')),
+                                   'sha256': music.sha(folder/'catalog-record.json')},
+                'original': {'path': str((folder/'original.mp3').relative_to(out/'project')),
+                             'sha256': music.sha(folder/'original.mp3'), 'duration': 2},
+                'attribution_file': str((folder/'ATTRIBUTION.txt').relative_to(out/'project')),
+            })
+            record['identity'] = music.identity(record)
         (out/'MUSIC.json').write_text(json.dumps(record))
-        timeline = {'timeline': {'tracks': [{'kind': 'audio', 'rows': [
-            {'id': 'bgm-bed', 'kind': 'audio', 'src': record['asset']['path'], 'absStart': 0, 'absEnd': 2, 'volume': .3}
-        ]}]}}
+        timeline = {'timeline': {'tracks': [{'kind': 'audio', 'rows': [{
+            'id': 'bgm-bed', 'kind': 'audio', 'src': record['asset']['path'],
+            'absStart': 0, 'absEnd': 2, 'duration': 2, 'mediaStart': 0, 'volume': .3,
+            'playbackRate': None, 'pendingReason': None, 'laneError': None, 'lanes': []
+        }]}]}}
         return music, record, timeline
 
     def test_music_missing_or_not_mounted_blocks_finish(self):
@@ -369,7 +391,7 @@ raise SystemExit('unexpected test CLI command: '+repr(a))
 
     def test_required_music_gated_and_credits_packaged(self):
         out = self.project()
-        music, record, timeline = self.music_fixture(out)
+        music, record, timeline = self.music_fixture(out, builtin=True)
         result = self.run_script('finish.sh', out/'project', 'fixture',
                                  env=dict(self.env, TEST_TIMELINE_JSON=json.dumps(timeline)))
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -377,17 +399,62 @@ raise SystemExit('unexpected test CLI command: '+repr(a))
         self.assertEqual(Path(paths['music_credits']).read_text(), record['attribution'])
         qa = json.loads(Path(paths['qa']).read_text())
         self.assertEqual(qa['music']['sha256'], record['asset']['sha256'])
+        self.assertEqual(qa['music']['identity'], record['identity'])
         with (out/'project'/record['asset']['path']).open('ab') as stream:
             stream.write(b'changed bed')
         with self.assertRaises(ValueError):
             music.check_music(out, timeline)
 
-    def test_music_wrong_duration_or_zero_gain_rejected(self):
+    def test_music_provenance_and_identity_tamper_rejected(self):
+        out = self.project()
+        music, record, timeline = self.music_fixture(out, builtin=True)
+        music.check_music(out, timeline)
+        credits = out/'project'/record['attribution_file']
+        credits.write_text('different credit text\n')
+        with self.assertRaises(ValueError):
+            music.check_music(out)
+        credits.write_text(record['attribution'])
+        (out/'project'/record['license_evidence']['file']).write_text('rewritten license')
+        with self.assertRaises(ValueError):
+            music.check_music(out)
+        (out/'project'/record['license_evidence']['file']).write_text(
+            'Attribution Code Kevin MacLeod ' + music.LICENSE)
+        record['title'] = 'Different track'
+        (out/'MUSIC.json').write_text(json.dumps(record))
+        with self.assertRaises(ValueError):
+            music.check_music(out)
+
+    def test_music_timeline_gain_offset_and_rate_rejected(self):
         out = self.project()
         music, record, timeline = self.music_fixture(out)
-        timeline['timeline']['tracks'][0]['rows'][0]['volume'] = 0
-        with self.assertRaises(ValueError): music.check_music(out, timeline)
+        row = timeline['timeline']['tracks'][0]['rows'][0]
+        variants = (
+            {'volume': 0},
+            {'volume': 1, 'lanes': [{'target': 'volume', 'points': [{'t': 0, 'v': 0}, {'t': 2, 'v': 0}]}]},
+            {'playbackRate': 1.5},
+            {'mediaStart': 1.5},
+            {'laneError': 'Automation is not valid JSON'},
+            {'pendingReason': 'unresolved duration'},
+            {'absEnd': 1.0, 'duration': 1.0},
+        )
+        for change in variants:
+            candidate = json.loads(json.dumps(timeline))
+            candidate['timeline']['tracks'][0]['rows'][0].update(change)
+            with self.assertRaises(ValueError, msg=str(change)):
+                music.check_music(out, candidate)
+
+    def test_music_wrong_duration_or_silent_bed_rejected(self):
+        out = self.project()
+        music, record, timeline = self.music_fixture(out)
         record['asset']['duration'] = 1
+        (out/'MUSIC.json').write_text(json.dumps(record))
+        with self.assertRaises(ValueError): music.check_music(out)
+        record['asset']['duration'] = 2
+        bed = out/'project'/record['asset']['path']
+        bed.unlink()
+        subprocess.run(['ffmpeg', '-nostdin', '-y', '-v', 'error', '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo',
+                        '-t', '2', '-c:a', 'pcm_s16le', str(bed)], check=True)
+        record['asset']['sha256'] = music.sha(bed)
         (out/'MUSIC.json').write_text(json.dumps(record))
         with self.assertRaises(ValueError): music.check_music(out)
 
@@ -396,11 +463,22 @@ raise SystemExit('unexpected test CLI command: '+repr(a))
         data = [
             {'title': 'Valid', 'isrc': 'VALID', 'length': '00:02:00', 'instruments': 'Piano', 'feel': 'Calming', 'bpm': '90'},
             {'title': 'Voice', 'isrc': 'VOICE', 'length': '00:02:00', 'instruments': 'Piano, Voice', 'feel': 'Calming', 'bpm': '90'},
+            {'title': 'Choir', 'isrc': 'CHOIR', 'length': '00:02:00', 'instruments': 'Piano, Choirs', 'feel': 'Calming', 'bpm': '90'},
+            {'title': 'Sung', 'isrc': 'SUNG', 'length': '00:02:00', 'instruments': 'Piano', 'description': 'A piece with wordless vocals.', 'feel': 'Calming', 'bpm': '90'},
+            {'title': 'Clean', 'isrc': 'CLEAN', 'length': '00:02:00', 'instruments': 'Piano', 'description': 'An instrumental without any vocals.', 'feel': 'Calming', 'bpm': '90'},
             {'title': 'Short', 'isrc': 'SHORT', 'length': '00:00:01', 'instruments': 'Piano', 'feel': 'Calming', 'bpm': '90'},
             {'title': 'Fast', 'isrc': 'FAST', 'length': '00:02:00', 'instruments': 'Piano', 'feel': 'Calming', 'bpm': '190'},
         ]
         ranked = music.rank(data, 'calming piano', 15, 70, 110)
-        self.assertEqual([r['id'] for r in ranked], ['VALID'])
+        self.assertEqual(sorted(r['id'] for r in ranked), ['CLEAN', 'VALID'])
+
+    def test_new_project_requires_explicit_music_policy(self):
+        path = self.case/'DELIVERY.json'
+        base = {k: v for k, v in self.expected.items() if k not in {'expect_music', 'music_exception'}}
+        path.write_text(json.dumps(base))
+        with self.assertRaises(ValueError): self.verify_module.expectations(path)
+        path.write_text(json.dumps(dict(base, legacy_project=True)))
+        self.verify_module.expectations(path)
 
     def test_music_prepare_download_decode_and_license_gate(self):
         music = module('music')
@@ -419,17 +497,20 @@ raise SystemExit('unexpected test CLI command: '+repr(a))
             prepared = music.prepare(args)
         self.assertEqual(prepared['status'], 'ready')
         self.assertAlmostEqual(prepared['asset']['duration'], 2, places=1)
+        self.assertEqual(prepared['identity'], music.identity(prepared))
         self.assertTrue((project/prepared['asset']['path']).is_file())
         self.assertTrue((project/prepared['attribution_file']).is_file())
+        self.assertTrue((project/prepared['license_evidence']['file']).is_file())
         args.record = str(self.case/'bad-license.json')
         with patch.object(music, 'catalog', return_value=[track]), patch.object(music, 'fetch', return_value=b'no license'):
             with self.assertRaises(ValueError): music.prepare(args)
 
     def test_music_exception_requires_reason(self):
         path = self.case/'DELIVERY.json'
-        path.write_text(json.dumps(dict(self.expected, expect_music=False)))
+        no_reason = {k: v for k, v in self.expected.items() if k != 'music_exception'}
+        path.write_text(json.dumps(no_reason))
         with self.assertRaises(ValueError): self.verify_module.expectations(path)
-        path.write_text(json.dumps(dict(self.expected, expect_music=False, music_exception='User asked for no music.')))
+        path.write_text(json.dumps(dict(no_reason, music_exception='User asked for no music.')))
         self.verify_module.expectations(path)
 
 

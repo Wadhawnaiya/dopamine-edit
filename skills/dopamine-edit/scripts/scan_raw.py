@@ -111,6 +111,8 @@ def validate_delivery(output: Path, target: Path) -> dict:
         music = check_music(output)
         if qa.get('music', {}).get('sha256') != music['sha256']:
             raise ValueError('music changed after verified render')
+        if music.get('identity') and qa.get('music', {}).get('identity') != music['identity']:
+            raise ValueError('music provenance changed after verified render')
         if not (output/'MUSIC.md').is_file():
             raise ValueError('missing footage-led music brief MUSIC.md')
     if qa.get('ok') is not True or qa.get('quality') != 'delivery':

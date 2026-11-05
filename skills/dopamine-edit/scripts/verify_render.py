@@ -49,9 +49,13 @@ def expectations(path: Path) -> dict:
             raise ValueError(f'{key} must be an integer')
     if not isinstance(data.get('expect_audio'), bool):
         raise ValueError('expect_audio must be explicitly true or false')
-    if 'expect_music' in data:
-        if not isinstance(data['expect_music'], bool):
-            raise ValueError('expect_music must be boolean')
+    if 'expect_music' not in data:
+        if data.get('legacy_project') is not True:
+            raise ValueError('new delivery plans must state expect_music true or false '
+                             '(legacy_project:true only for projects created before music gating)')
+    elif not isinstance(data['expect_music'], bool):
+        raise ValueError('expect_music must be boolean')
+    else:
         if data['expect_music'] and not data['expect_audio']:
             raise ValueError('required music conflicts with silent delivery')
         if not data['expect_music'] and not str(data.get('music_exception', '')).strip():

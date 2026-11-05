@@ -61,7 +61,7 @@ output/<unique-slug>/
   BRIEF.md          # workflow: general-video; flow: automation; storyboard: no
   STORYBOARD.md     # timed beats and scene sources
   EDIT.md           # source-to-output edit map, layers, audio, exceptions
-  DELIVERY.json     # expected duration, width, height, fps, expect_audio
+  DELIVERY.json     # expected duration, width, height, fps, expect_audio/music
   REVIEW.json       # evidence-backed review of this exact MP4
   MUSIC.md          # footage-led music brief, shortlist decision and cue plan
   MUSIC.json        # downloaded bed, source/license, hash, duration, credits
@@ -221,8 +221,9 @@ separate captions, footage, graphics and audio tracks.
 
 After scaffolding and before assembling the final soundtrack, use
 `scripts/music.py prepare` to download the selected track and create a local
-full-duration bed + `MUSIC.json` + credit text. Set `expect_music: true` in
-`DELIVERY.json`, mount the exact asset as `<audio id="bgm-bed">` on its own
+full-duration bed + `MUSIC.json` + credit text. State `expect_music` explicitly
+in `DELIVERY.json` (new projects: `true`, or `false` + `music_exception`),
+mount the exact asset as `<audio id="bgm-bed">` on its own
 music track and mix it under dialogue. Do not stop at downloading: the finish
 gate checks the actual timeline references it. See the music guide for commands.
 

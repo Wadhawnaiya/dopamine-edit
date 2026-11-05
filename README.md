@@ -13,8 +13,9 @@ delivery checks.
 4. Searches public licensed instrumental music, downloads a selected track and
    prepares a trimmed/faded local bed with license evidence and credit text.
 5. Mounts the bed in the composition and mixes it under dialogue.
-6. Checks the composition, encoded video/audio, required music timeline,
-   dimensions/FPS/duration, loudness and review evidence before marking done.
+6. Checks the composition, encoded video/audio, required music provenance and
+   actual timeline use, dimensions/FPS/duration, loudness and review evidence
+   before marking done.
 
 This is an **agent workflow**, not an unattended all-in-one video-editor binary.
 An agent performs creative decisions and calls the bundled deterministic helpers.

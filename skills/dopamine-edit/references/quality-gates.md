@@ -31,13 +31,17 @@ Capture `SOURCE.json` with `scan_raw.py --record-source` **before ingestion**.
 The finish helper validates it before/after render and carries it into QA.
 Never replace its fingerprint to bless an old project after raw media changes.
 
-New edits default to `expect_music: true`: `MUSIC.json` must identify a licensed,
-project-local bed of the correct duration, and `finish.sh` verifies its hash and
-mounted `bgm-bed` timeline clip. Use `expect_music: false` only with a meaningful
-`music_exception` for deliberately silent/source-music/no-added-music briefs.
-Old expectation files without the field remain compatible. Required music may
-not disappear silently on a download failure. Credits are copied beside the
-candidate; carry them into the posting description/caption as required.
+New edits must state `expect_music` explicitly (`true` by default): `MUSIC.json`
+must identify a licensed, project-local bed of the correct duration, and
+`finish.sh` verifies its hash, saved license/catalog/attribution evidence and
+identity plus the mounted `bgm-bed` timeline clip (coverage, source offset, rate,
+readable automation, effective gain). Use `expect_music: false` only with a
+meaningful `music_exception` for deliberately silent/source-music/no-added-music
+briefs. Only a project created before music gating may set `legacy_project: true`
+to omit the field. Required music may not disappear silently on a download
+failure. Credits are copied beside the candidate; carry them into the posting
+description/caption as required. Audibility is checked from bed level and
+timeline gain/automation, not an isolated stem — state that limit honestly.
 
 ## 2. Composition
 

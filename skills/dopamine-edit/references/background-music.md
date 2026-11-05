@@ -65,6 +65,8 @@ stays inspectable; use a fresh project/revision or another ID, never overwrite.
 ## 3. Mount and mix—not just download
 
 Set `DELIVERY.json` `expect_audio: true` and `expect_music: true` by default.
+New delivery plans must state `expect_music` explicitly; omission is rejected
+unless the project is marked `legacy_project: true` (only for pre-music work).
 Mount the exact `MUSIC.json` `asset.path` with `id="bgm-bed"`,
 `data-timeline-role="music"`, one audio track, start 0, full edit duration and
 the core timing attributes. Use a real `<audio>`, not a playback JS call.
@@ -75,6 +77,16 @@ measure the encoded master around -14 LUFS integrated / ≤ -1 dBTP. Ensure musi
 does not mask consonants, start late, end early, click or restart at every scene.
 SFX are a separate restrained layer. Music-led clips may use `/music-to-video`
 for a beat grid; spoken words remain the primary timing authority for dialogue.
+
+The finish gate re-reads `MUSIC.json` and the real HyperFrames timeline: the
+`bgm-bed` clip must use the exact prepared file and cover the full edit, keep the
+prepared source offset, a normal playback rate, readable automation and a
+non-muted effective volume for at least part of the edit. It also rejects a
+missing/silent/re-encoded bed and, for built-in downloads, an attribution,
+license-evidence, catalog-record, original-audio or identity change. Master
+loudness alone never proves music is audible: record whether you auditioned the
+final mix (`listened`), measured it, or only inspected metadata. There is no
+isolated music-stem render; do not claim one.
 
 `finish.sh` validates the required licensed music hash/duration and actual
 HyperFrames timeline use before render. QA stores the music identity and copies
@@ -91,6 +103,9 @@ For each specific track verify commercial use **and synchronization/adaptation**
 permission, download terms, required credits and any Content ID caveat. CC0 or
 CC BY is the default; avoid NC/ND/SA or unclear licenses for an unknown destination.
 “Royalty free”, “no copyright” or a download button alone is not a license.
+Vocal checks are metadata only and singular/plural aware: declared voices, choirs
+or sung descriptions are excluded unless negated (“without vocals”). A passing
+search still means *metadata-inferred instrumental*, not an auditioned guarantee.
 
 Prefer the authorized original audio URL. yt-dlp may retrieve a **specifically
 licensed** track from a supported page if download terms permit; it does not
