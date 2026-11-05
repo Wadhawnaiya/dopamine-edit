@@ -166,7 +166,8 @@ owner's own photo, cut out with a deterministic ImageMagick key
 (`scripts/brand-cutout.sh`, luminance × saturation) into a transparent PNG; the
 dark curtain is removed, the acrylic mount and tube glow stay part of the sign.
 
-1. Build the asset once:
+1. The cutout ships with the skill (`assets/brand/logo.png`). To rebuild from a
+   newer photo:
 
    ```bash
    bash skills/dopamine-edit/scripts/brand-cutout.sh /path/to/your-sign-photo.jpg \
@@ -179,9 +180,18 @@ dark curtain is removed, the acrylic mount and tube glow stay part of the sign.
 3. Set `expect_brand: true` in `DELIVERY.json`. `finish.sh` then refuses a
    candidate whose brand layer is missing, changed, or not covering the edit.
 
-This repository does **not** ship a personal brand image: the asset directory is
-gitignored, so build it from your own photo (set `DOPAMINE_BRAND_DIR` to keep the
-brand asset outside the skill). Gate details:
+This repository **ships the transparent cutout** (`logo.png` + `logo.json`) so
+the brand gate works out of the box; the owner's **original photo is not
+committed** because it shows their room, not just the sign. Rebuild the cutout
+from your own photo (set `DOPAMINE_BRAND_DIR` to keep brand assets outside the
+skill) with:
+
+```bash
+bash skills/dopamine-edit/scripts/brand-cutout.sh /path/to/your-photo.jpg \
+  --outdir skills/dopamine-edit/assets/brand
+```
+
+Gate details:
 [`skills/dopamine-edit/references/brand-layer.md`](skills/dopamine-edit/references/brand-layer.md).
 
 ## Tests and limits

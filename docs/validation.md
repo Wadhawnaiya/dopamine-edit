@@ -28,7 +28,7 @@ present, coverage recorded, idempotent rebuild), install into a project, refusal
 when the project image differs, changed asset hash, wrong clip id or `src`,
 incomplete timeline coverage, unreadable automation, and explicit `expect_brand`
 policy. Tests for the gate build a synthetic brand stand-in; the owner's real
-photo is never committed.
+photo is never committed (only the derived transparent cutout).
 
 Preview-checkpoint cases include delivery blocked without an approval, approval
 allowing delivery, approval invalidated by a composition edit, `preview.sh`

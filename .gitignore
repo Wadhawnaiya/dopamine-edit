@@ -9,8 +9,10 @@ cookies*
 raw/
 output/
 reference/
-skills/dopamine-edit/assets/brand/*
-!skills/dopamine-edit/assets/brand/BRAND.md
+# Brand: the derived cutout (logo.png/logo.json) is published; the original
+# personal photo (bg.jpg) stays local and is never committed.
+skills/dopamine-edit/assets/brand/bg.jpg
+skills/dopamine-edit/assets/brand/*.part
 final/
 renders/
 .media/

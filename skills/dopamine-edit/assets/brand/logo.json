@@ -1,0 +1,22 @@
+{
+  "asset": "logo.png",
+  "source": "bg.jpg",
+  "source_sha256": "573311da2af335e078a4635ed984916c7602279e4b516c255c336852d39e3e1d",
+  "asset_sha256": "b35e79492749be61e858aa58598671c31fadc717c4da0f2007f6937dfb0c50ae",
+  "width": 1066,
+  "height": 549,
+  "alpha_coverage": 0.1674,
+  "recipe_version": 1,
+  "recipe": {
+    "tool": "ImageMagick",
+    "level": "28%,70%",
+    "gamma": "0.9",
+    "blur": "0x0.5",
+    "modulate": "105,130,100",
+    "border": 24,
+    "space": "luma*saturation"
+  },
+  "tool_version": "Version: ImageMagick 7.1.2-35 Q16-HDRI x86_64 acaf7e418:20261031 https://imagemagick.org",
+  "created_at": "2026-11-05T08:28:33Z",
+  "note": "Background removed with a luminance x saturation key; acrylic mount and tube glow are part of the sign."
+}
